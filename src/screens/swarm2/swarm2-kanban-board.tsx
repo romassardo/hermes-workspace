@@ -548,7 +548,14 @@ export function Swarm2KanbanBoard({
         })}
       </div>
 
-      <Swarm2CardDetailDialog card={detailCard} workers={workers} onClose={() => setDetailCard(null)} />
+      {detailCard ? (
+        <Swarm2CardDetailDialog
+          key={detailCard.id}
+          card={detailCard}
+          workers={workers}
+          onClose={() => setDetailCard(null)}
+        />
+      ) : null}
     </section>
   )
 }

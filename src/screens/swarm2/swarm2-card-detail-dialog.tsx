@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { workerLabel } from './swarm2-kanban-types'
+import { Swarm2TmuxLive } from './swarm2-tmux-live'
 import type { KanbanWorker, SwarmKanbanCard } from './swarm2-kanban-types'
 import { cn } from '@/lib/utils'
 
@@ -126,6 +127,13 @@ export function Swarm2CardDetailDialog({
 }: Swarm2CardDetailDialogProps) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
+
+  // The dialog remounts per card (keyed by the `card` prop upstream), so the
+  // initial tab is computed once: a running card opens on the live tmux pane,
+  // anything else on the persisted summary.
+  const [outputTab, setOutputTab] = useState<'live' | 'summary'>(() =>
+    card?.status === 'running' ? 'live' : 'summary',
+  )
 
   // On open: move focus into the dialog and remember the previously focused
   // element so we can restore it on close (WCAG 2.4.3). While open: close on
@@ -266,16 +274,41 @@ export function Swarm2CardDetailDialog({
           ) : null}
 
           <div className="border-t border-[var(--theme-border)] pt-4">
-            {isRunning ? (
-              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
-                <span
-                  className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"
-                  aria-hidden="true"
-                />
-                <span>en vivo</span>
-              </div>
-            ) : null}
-            {query.isPending ? (
+            <div
+              role="group"
+              aria-label="Salida del worker"
+              className="mb-3 inline-flex rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card2)] p-0.5 text-[11px] font-semibold uppercase tracking-[0.14em]"
+            >
+              <button
+                type="button"
+                aria-pressed={outputTab === 'live'}
+                onClick={() => setOutputTab('live')}
+                className={cn(
+                  'rounded-lg px-3 py-1 transition-colors',
+                  outputTab === 'live'
+                    ? 'bg-[var(--theme-accent)] text-[var(--theme-bg)]'
+                    : 'text-[var(--theme-muted)] hover:text-[var(--theme-text)]',
+                )}
+              >
+                En vivo
+              </button>
+              <button
+                type="button"
+                aria-pressed={outputTab === 'summary'}
+                onClick={() => setOutputTab('summary')}
+                className={cn(
+                  'rounded-lg px-3 py-1 transition-colors',
+                  outputTab === 'summary'
+                    ? 'bg-[var(--theme-accent)] text-[var(--theme-bg)]'
+                    : 'text-[var(--theme-muted)] hover:text-[var(--theme-text)]',
+                )}
+              >
+                Resumen
+              </button>
+            </div>
+            {outputTab === 'live' ? (
+              <Swarm2TmuxLive workerId={card.assignedWorker} />
+            ) : query.isPending ? (
               <div className="rounded-xl border border-dashed border-[var(--theme-border)] p-3 text-sm text-[var(--theme-muted)]">
                 Loading worker detail and log…
               </div>
