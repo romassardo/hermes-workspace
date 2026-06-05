@@ -199,6 +199,15 @@ export function buildHermesTmuxLaunchCommand(input: {
   return `${launchPrefix} '${hermesBin}' chat --tui; status=$?; printf '\n[Hermes worker exited with status %s]\n' "$status"`
 }
 
+// Args for the oneshot `hermes chat` fallback (used when no live tmux session
+// is available). Deliberately does NOT pass --ignore-rules: that flag makes the
+// agent skip loading its SOUL.md and preloaded skills, which strips a worker of
+// its persona and tools (e.g. Argos loses its web-search skill, Kapelusz loses
+// manual-biia). Profiled workers must run with their profile rules active.
+export function buildOneshotChatArgs(prompt: string): Array<string> {
+  return ['chat', '-q', prompt, '-Q', '--yolo', '--source', 'swarm-dispatch']
+}
+
 function parseAssignments(value: unknown): Array<AssignmentRequest> {
   if (!Array.isArray(value)) return []
   const assignments: Array<AssignmentRequest> = []
@@ -870,9 +879,7 @@ function runWorker(assignment: AssignmentRequest, timeoutMs: number, roster: Swa
 
     const useWrapper = existsSync(wrapperPath)
     const cmd = useWrapper ? wrapperPath : resolveHermesBin()
-    const args = useWrapper
-      ? ['chat', '-q', prompt, '-Q', '--yolo', '--ignore-rules', '--source', 'swarm-dispatch']
-      : ['chat', '-q', prompt, '-Q', '--yolo', '--ignore-rules', '--source', 'swarm-dispatch']
+    const args = buildOneshotChatArgs(prompt)
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       HERMES_HOME: profilePath,

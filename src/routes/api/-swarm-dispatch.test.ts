@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildHermesTmuxLaunchCommand,
+  buildOneshotChatArgs,
   buildWorkerPrompt,
   checkpointFromRuntimeSnapshot,
   runtimeCheckpointSignature,
@@ -106,6 +107,23 @@ describe('buildHermesTmuxLaunchCommand', () => {
     expect(command).toContain("'/opt/homebrew/bin/hermes' chat --tui")
     expect(command).toContain('[Hermes worker exited with status %s]')
     expect(command).not.toContain('exec ')
+  })
+})
+
+describe('buildOneshotChatArgs', () => {
+  it('runs the oneshot worker with its profile rules active (no --ignore-rules)', () => {
+    const args = buildOneshotChatArgs('investigá X')
+
+    // --ignore-rules makes the agent skip loading its SOUL.md + preloaded
+    // skills, stripping the worker of its persona and tools (e.g. Argos loses
+    // its web-search skill). It must never be passed to a profiled worker.
+    expect(args).not.toContain('--ignore-rules')
+  })
+
+  it('passes the prompt via -q and tags the dispatch source', () => {
+    const args = buildOneshotChatArgs('investigá X')
+
+    expect(args).toEqual(['chat', '-q', 'investigá X', '-Q', '--yolo', '--source', 'swarm-dispatch'])
   })
 })
 
