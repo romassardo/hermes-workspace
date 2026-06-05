@@ -81,7 +81,7 @@ type RuntimeCheckpointSnapshot = {
 
 const MAX_PROMPT_CHARS = 32_000
 const MAX_OUTPUT_CHARS = 200_000
-const DEFAULT_TIMEOUT_S = 240
+const DEFAULT_TIMEOUT_S = 600
 const MAX_TIMEOUT_S = 600
 
 function getProfilesDir(): string {
@@ -888,8 +888,8 @@ function runWorker(assignment: AssignmentRequest, timeoutMs: number, roster: Swa
     const useWrapper = existsSync(wrapperPath)
     const cmd = useWrapper ? wrapperPath : resolveHermesBin()
     const args = useWrapper
-      ? ['chat', '-q', '-Q', '--yolo', '--ignore-rules', '--source', 'swarm-dispatch', prompt]
-      : ['chat', '-q', '-Q', '--yolo', '--ignore-rules', '--source', 'swarm-dispatch']
+      ? ['chat', '-q', prompt, '-Q', '--yolo', '--ignore-rules', '--source', 'swarm-dispatch']
+      : ['chat', '-q', prompt, '-Q', '--yolo', '--ignore-rules', '--source', 'swarm-dispatch']
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       HERMES_HOME: profilePath,
