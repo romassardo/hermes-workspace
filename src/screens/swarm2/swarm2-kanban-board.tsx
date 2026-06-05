@@ -2,30 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Swarm2CardDetailDialog } from './swarm2-card-detail-dialog'
+import { workerLabel } from './swarm2-kanban-types'
+import type { KanbanLane, KanbanWorker, SwarmKanbanCard } from './swarm2-kanban-types'
 import { cn } from '@/lib/utils'
-
-type KanbanLane = 'backlog' | 'ready' | 'running' | 'review' | 'blocked' | 'done'
-
-type SwarmKanbanCard = {
-  id: string
-  title: string
-  spec: string
-  acceptanceCriteria: Array<string>
-  assignedWorker: string | null
-  reviewer: string | null
-  status: KanbanLane
-  missionId: string | null
-  reportPath: string | null
-  createdBy: string
-  createdAt: number
-  updatedAt: number
-}
-
-type KanbanWorker = {
-  id: string
-  displayName?: string | null
-  role?: string | null
-}
 
 type KanbanBackendMeta = {
   id: 'local' | 'claude' | 'hermes-proxy'
@@ -187,12 +167,6 @@ function splitCriteria(value: string): Array<string> {
     .filter(Boolean)
 }
 
-function workerLabel(workers: Array<KanbanWorker>, workerId: string | null): string {
-  if (!workerId) return 'Unassigned'
-  const worker = workers.find((item) => item.id === workerId)
-  return worker?.displayName || workerId
-}
-
 export function Swarm2KanbanBoard({
   workers,
   latestMission,
@@ -211,6 +185,7 @@ export function Swarm2KanbanBoard({
   const [draftStatus, setDraftStatus] = useState<KanbanLane>('backlog')
   const [linkLatestMission, setLinkLatestMission] = useState(Boolean(latestMission))
   const [backendToast, setBackendToast] = useState<KanbanBackendPresentation | null>(null)
+  const [detailCard, setDetailCard] = useState<SwarmKanbanCard | null>(null)
   const lastToastedBackendKey = useRef<string | null>(null)
 
   // Poll every 5s so cards added/moved on the Hermes Dashboard appear here
@@ -467,7 +442,20 @@ export function Swarm2KanbanBoard({
                 ) : laneCards.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-[var(--theme-border)] p-3 text-xs text-[var(--theme-muted)]">Empty</div>
                 ) : laneCards.map((card) => (
-                  <article key={card.id} className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-3 text-left shadow-sm">
+                  <article
+                    key={card.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setDetailCard(card)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setDetailCard(card)
+                      }
+                    }}
+                    aria-label={`Open detail for ${card.title}`}
+                    className="cursor-pointer rounded-xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-3 text-left shadow-sm transition-colors hover:border-[var(--theme-accent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-accent)]"
+                  >
                     <div className="text-sm font-semibold leading-snug text-[var(--theme-text)]">{card.title}</div>
                     {card.spec ? <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-[var(--theme-muted-2)]">{card.spec}</p> : null}
                     {card.acceptanceCriteria.length ? (
@@ -482,14 +470,14 @@ export function Swarm2KanbanBoard({
                       {card.missionId ? <div className="truncate" title={card.missionId}>Mission: {card.missionId}</div> : null}
                       {card.reportPath ? <div className="truncate" title={card.reportPath}>Report: {card.reportPath}</div> : null}
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
+                    <div className="mt-3 flex flex-wrap gap-1.5" onClick={(event) => event.stopPropagation()}>
                       {card.assignedWorker ? (
-                        <button type="button" onClick={() => onSelectWorker?.(card.assignedWorker!)} className="rounded-full border border-[var(--theme-border)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-muted)] hover:bg-[var(--theme-card2)] hover:text-[var(--theme-text)]">Open worker</button>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); onSelectWorker?.(card.assignedWorker!) }} className="rounded-full border border-[var(--theme-border)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-muted)] hover:bg-[var(--theme-card2)] hover:text-[var(--theme-text)]">Open worker</button>
                       ) : null}
-                      {card.status !== 'running' ? <button type="button" onClick={() => updateMutation.mutate({ id: card.id, updates: { status: 'running' } })} className="rounded-full border border-[var(--theme-border)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-muted)] hover:bg-[var(--theme-card2)] hover:text-[var(--theme-text)]">Run</button> : null}
-                      {card.status !== 'review' ? <button type="button" onClick={() => updateMutation.mutate({ id: card.id, updates: { status: 'review' } })} className="rounded-full border border-[var(--theme-border)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-muted)] hover:bg-[var(--theme-card2)] hover:text-[var(--theme-text)]">Review</button> : null}
-                      {card.status !== 'done' ? <button type="button" onClick={() => updateMutation.mutate({ id: card.id, updates: { status: 'done' } })} className="rounded-full border border-[var(--theme-border)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-muted)] hover:bg-[var(--theme-card2)] hover:text-[var(--theme-text)]">Done</button> : null}
-                      {onOpenRouter ? <button type="button" onClick={onOpenRouter} className="rounded-full border border-[var(--theme-accent)] bg-[var(--theme-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-accent-strong)]">Router</button> : null}
+                      {card.status !== 'running' ? <button type="button" onClick={(event) => { event.stopPropagation(); updateMutation.mutate({ id: card.id, updates: { status: 'running' } }) }} className="rounded-full border border-[var(--theme-border)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-muted)] hover:bg-[var(--theme-card2)] hover:text-[var(--theme-text)]">Run</button> : null}
+                      {card.status !== 'review' ? <button type="button" onClick={(event) => { event.stopPropagation(); updateMutation.mutate({ id: card.id, updates: { status: 'review' } }) }} className="rounded-full border border-[var(--theme-border)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-muted)] hover:bg-[var(--theme-card2)] hover:text-[var(--theme-text)]">Review</button> : null}
+                      {card.status !== 'done' ? <button type="button" onClick={(event) => { event.stopPropagation(); updateMutation.mutate({ id: card.id, updates: { status: 'done' } }) }} className="rounded-full border border-[var(--theme-border)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-muted)] hover:bg-[var(--theme-card2)] hover:text-[var(--theme-text)]">Done</button> : null}
+                      {onOpenRouter ? <button type="button" onClick={(event) => { event.stopPropagation(); onOpenRouter() }} className="rounded-full border border-[var(--theme-accent)] bg-[var(--theme-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--theme-accent-strong)]">Router</button> : null}
                     </div>
                   </article>
                 ))}
@@ -498,6 +486,8 @@ export function Swarm2KanbanBoard({
           )
         })}
       </div>
+
+      <Swarm2CardDetailDialog card={detailCard} workers={workers} onClose={() => setDetailCard(null)} />
     </section>
   )
 }

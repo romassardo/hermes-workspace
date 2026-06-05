@@ -12,24 +12,7 @@ import { appendSwarmMemoryEvent, buildSwarmStartupSnapshot } from '../../server/
 import { rosterByWorkerId, type SwarmRosterWorker } from '../../server/swarm-roster'
 import { publishSwarmCheckpointNotification } from '../../server/swarm-notifications'
 import { ensureSwarmProfileConfig } from '../../server/swarm-profile-config'
-
-const HERMES_BIN_CANDIDATES = [
-  process.env.HERMES_CLI_BIN,
-  join(homedir(), '.hermes', 'hermes-agent', 'venv', 'bin', 'hermes'),
-  join(homedir(), '.local', 'bin', 'hermes'),
-  'hermes',
-].filter((value): value is string => Boolean(value))
-
-function resolveHermesBin(): string {
-  for (const candidate of HERMES_BIN_CANDIDATES) {
-    if (candidate.includes('/')) {
-      if (existsSync(candidate)) return candidate
-      continue
-    }
-    return candidate
-  }
-  return 'hermes'
-}
+import { resolveHermesBin } from '../../server/hermes-cli'
 
 type AssignmentRequest = {
   workerId: string
