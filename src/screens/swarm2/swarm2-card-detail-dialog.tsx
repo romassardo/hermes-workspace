@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { workerLabel } from './swarm2-kanban-types'
 import type { KanbanWorker, SwarmKanbanCard } from './swarm2-kanban-types'
+import { cn } from '@/lib/utils'
 
 type KanbanLogPayload =
   | { ok: true; id: string; show: string; log: string }
@@ -53,10 +54,63 @@ function MetaRow({
 }
 
 function OutputBlock({ label, text }: { label: string; text: string }) {
+  // Transient "Copiado ✓" / "Error al copiar" feedback after a copy attempt.
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>(
+    'idle',
+  )
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current)
+    }
+  }, [])
+
+  const scheduleReset = () => {
+    if (resetTimer.current) clearTimeout(resetTimer.current)
+    resetTimer.current = setTimeout(() => setCopyState('idle'), 1500)
+  }
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyState('copied')
+    } catch {
+      setCopyState('error')
+    }
+    scheduleReset()
+  }
+
   return (
     <div>
-      <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">
-        {label}
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--theme-muted)]">
+          {label}
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleCopy()}
+          aria-label={`Copiar ${label}`}
+          className={cn(
+            'rounded-lg border px-2 py-0.5 text-[10px] font-semibold transition-colors',
+            copyState === 'error'
+              ? 'border-red-400/40 bg-red-500/10 text-red-700'
+              : copyState === 'copied'
+                ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-700'
+                : 'border-[var(--theme-border)] bg-[var(--theme-card2)] text-[var(--theme-muted)] hover:text-[var(--theme-text)]',
+          )}
+        >
+          {copyState === 'copied'
+            ? 'Copiado ✓'
+            : copyState === 'error'
+              ? 'Error al copiar'
+              : 'Copiar'}
+        </button>
+        {copyState !== 'idle' ? (
+          <span className="sr-only" role="status">
+            {copyState === 'copied' ? `${label} copiado` : `Error al copiar ${label}`}
+          </span>
+        ) : null}
       </div>
       <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg)] p-3 text-xs leading-relaxed text-[var(--theme-text)]">
         {text.trim() ? text : '(empty)'}
@@ -111,11 +165,15 @@ export function Swarm2CardDetailDialog({
     }
   }, [card, onClose])
 
+  // While the worker is running the log keeps growing, so poll it; once the
+  // card leaves the running state stop polling to avoid needless requests.
+  const isRunning = card?.status === 'running'
   const query = useQuery({
     queryKey: ['swarm2', 'kanban', 'log', card?.id],
     queryFn: () => fetchKanbanLog(card!.id),
     enabled: Boolean(card),
     staleTime: 10_000,
+    refetchInterval: isRunning ? 4_000 : false,
   })
 
   if (!card) return null
@@ -208,6 +266,15 @@ export function Swarm2CardDetailDialog({
           ) : null}
 
           <div className="border-t border-[var(--theme-border)] pt-4">
+            {isRunning ? (
+              <div className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                <span
+                  className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"
+                  aria-hidden="true"
+                />
+                <span>en vivo</span>
+              </div>
+            ) : null}
             {query.isPending ? (
               <div className="rounded-xl border border-dashed border-[var(--theme-border)] p-3 text-sm text-[var(--theme-muted)]">
                 Loading worker detail and log…

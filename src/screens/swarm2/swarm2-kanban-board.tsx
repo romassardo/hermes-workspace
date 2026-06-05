@@ -167,6 +167,24 @@ function splitCriteria(value: string): Array<string> {
     .filter(Boolean)
 }
 
+/**
+ * Pure, immutable board filter. `worker` '' keeps all workers, otherwise keeps
+ * cards whose `assignedWorker` matches. `text` (trimmed, case-insensitive)
+ * matches against title, spec, or any acceptance-criteria item. Combined AND.
+ */
+export function filterCards(
+  cards: Array<SwarmKanbanCard>,
+  filters: { worker: string; text: string },
+): Array<SwarmKanbanCard> {
+  const needle = filters.text.trim().toLowerCase()
+  return cards.filter((card) => {
+    if (filters.worker && card.assignedWorker !== filters.worker) return false
+    if (!needle) return true
+    const haystacks = [card.title, card.spec, ...card.acceptanceCriteria]
+    return haystacks.some((value) => value.toLowerCase().includes(needle))
+  })
+}
+
 export function Swarm2KanbanBoard({
   workers,
   latestMission,
@@ -186,6 +204,8 @@ export function Swarm2KanbanBoard({
   const [linkLatestMission, setLinkLatestMission] = useState(Boolean(latestMission))
   const [backendToast, setBackendToast] = useState<KanbanBackendPresentation | null>(null)
   const [detailCard, setDetailCard] = useState<SwarmKanbanCard | null>(null)
+  const [filterWorker, setFilterWorker] = useState('')
+  const [filterText, setFilterText] = useState('')
   const lastToastedBackendKey = useRef<string | null>(null)
 
   // Poll every 5s so cards added/moved on the Hermes Dashboard appear here
@@ -250,17 +270,28 @@ export function Swarm2KanbanBoard({
     },
   })
 
+  const filterActive = filterWorker !== '' || filterText.trim() !== ''
+  const filteredCards = useMemo(
+    () =>
+      filterCards(query.data?.cards ?? [], {
+        worker: filterWorker,
+        text: filterText,
+      }),
+    [query.data?.cards, filterWorker, filterText],
+  )
+
   const cardsByLane = useMemo(() => {
     const map = new Map<KanbanLane, Array<SwarmKanbanCard>>()
     for (const lane of LANES) map.set(lane.id, [])
-    for (const card of query.data?.cards ?? []) {
+    for (const card of filteredCards) {
       const bucket = map.get(card.status) ?? map.get('backlog')!
       bucket.push(card)
     }
     return map
-  }, [query.data])
+  }, [filteredCards])
 
   const total = query.data?.cards.length ?? 0
+  const filteredTotal = filteredCards.length
   const reviewCount = cardsByLane.get('review')?.length ?? 0
   const blockedCount = cardsByLane.get('blocked')?.length ?? 0
 
@@ -275,7 +306,7 @@ export function Swarm2KanbanBoard({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--theme-muted)]">
-          <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2 py-1">{total} cards</span>
+          <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2 py-1">{filterActive ? `${filteredTotal} / ${total}` : total} cards</span>
           {backendPresentation.dashboardUrl ? (
             <a
               href={backendPresentation.dashboardUrl}
@@ -326,6 +357,36 @@ export function Swarm2KanbanBoard({
           )}
           <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2 py-1">{reviewCount} review</span>
           <span className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2 py-1">{blockedCount} blocked</span>
+          <select
+            value={filterWorker}
+            onChange={(event) => setFilterWorker(event.target.value)}
+            aria-label="Filtrar por worker"
+            className="rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-2 py-1 text-[var(--theme-text)] outline-none"
+          >
+            <option value="">Todos</option>
+            {workers.map((worker) => (
+              <option key={worker.id} value={worker.id}>{worker.displayName || worker.id}</option>
+            ))}
+          </select>
+          <input
+            value={filterText}
+            onChange={(event) => setFilterText(event.target.value)}
+            placeholder="Buscar…"
+            aria-label="Buscar cards"
+            className="w-32 rounded-full border border-[var(--theme-border)] bg-[var(--theme-bg)] px-3 py-1 text-[var(--theme-text)] outline-none"
+          />
+          {filterActive ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFilterWorker('')
+                setFilterText('')
+              }}
+              className="rounded-full border border-[var(--theme-border)] px-2 py-1 font-semibold text-[var(--theme-muted)] hover:bg-[var(--theme-card2)] hover:text-[var(--theme-text)]"
+            >
+              Limpiar
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {
