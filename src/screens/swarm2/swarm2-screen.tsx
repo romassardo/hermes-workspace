@@ -30,29 +30,30 @@ import { RouterChat } from '@/components/swarm/router-chat'
 import { SwarmTerminal } from '@/components/swarm/swarm-terminal'
 import { WorkflowHelpModal } from '@/components/workflow-help-modal'
 import { cn } from '@/lib/utils'
+import type { AuroraAgent } from './aurora/swarm2-aurora-data'
+import { auroraProgress, deriveAuroraStatus, monogram } from './aurora/swarm2-aurora-data'
+import { AuroraHeader, AuroraOrgChart } from './aurora/swarm2-aurora-organigrama'
+import { AuroraDetailPanel, type AuroraDetailTab } from './aurora/swarm2-aurora-detail'
 
 const SWARM2_ROOM_STORAGE_KEY = 'claude-swarm2-room-v1'
 
+// Swarm now renders on the genuine `--theme-*` palette of the active theme
+// (calibrated against `claude-classic` for the "Aurora" redesign). This object
+// only DERIVES the extra tokens that legacy swarm components still expect — it
+// no longer overrides the base tokens, so the surface picks up the real theme
+// and stays theme-aware (and loses the previous muddy `--color-*` remap).
 const SWARM2_OPERATION_THEME: CSSProperties = {
-  ['--theme-bg' as string]: 'var(--color-surface)',
-  ['--theme-card' as string]: 'var(--color-primary-50)',
-  ['--theme-card2' as string]: 'var(--color-primary-100)',
-  ['--theme-border' as string]: 'var(--color-primary-200)',
-  ['--theme-border2' as string]: 'var(--color-primary-400)',
-  ['--theme-text' as string]: 'var(--color-ink)',
-  ['--theme-muted' as string]: 'var(--color-primary-700)',
-  ['--theme-muted-2' as string]: 'var(--color-primary-600)',
-  ['--theme-accent' as string]: 'var(--color-accent-500)',
-  ['--theme-accent-strong' as string]: 'var(--color-accent-600)',
-  ['--theme-accent-soft' as string]: 'color-mix(in srgb, var(--color-accent-500) 12%, transparent)',
-  ['--theme-accent-soft-strong' as string]: 'color-mix(in srgb, var(--color-accent-500) 18%, transparent)',
-  ['--theme-shadow' as string]: 'color-mix(in srgb, var(--color-primary-950) 14%, transparent)',
-  ['--theme-danger' as string]: 'var(--color-red-600, #dc2626)',
-  ['--theme-danger-soft' as string]: 'color-mix(in srgb, var(--theme-danger) 12%, transparent)',
-  ['--theme-danger-border' as string]: 'color-mix(in srgb, var(--theme-danger) 35%, white)',
-  ['--theme-warning' as string]: 'var(--color-amber-600, #d97706)',
-  ['--theme-warning-soft' as string]: 'color-mix(in srgb, var(--theme-warning) 12%, transparent)',
-  ['--theme-warning-border' as string]: 'color-mix(in srgb, var(--theme-warning) 35%, white)',
+  ['--theme-faint' as string]: 'color-mix(in srgb, var(--theme-muted) 72%, transparent)',
+  ['--theme-muted-2' as string]: 'color-mix(in srgb, var(--theme-muted) 82%, var(--theme-text))',
+  ['--theme-border2' as string]: 'var(--theme-accent-border)',
+  ['--theme-accent-strong' as string]: 'var(--theme-accent-secondary)',
+  ['--theme-accent-soft' as string]: 'var(--theme-accent-subtle)',
+  ['--theme-accent-soft-strong' as string]: 'color-mix(in srgb, var(--theme-accent) 22%, transparent)',
+  ['--theme-shadow' as string]: 'var(--theme-shadow-2)',
+  ['--theme-danger-soft' as string]: 'color-mix(in srgb, var(--theme-danger) 14%, transparent)',
+  ['--theme-danger-border' as string]: 'color-mix(in srgb, var(--theme-danger) 38%, transparent)',
+  ['--theme-warning-soft' as string]: 'color-mix(in srgb, var(--theme-warning) 14%, transparent)',
+  ['--theme-warning-border' as string]: 'color-mix(in srgb, var(--theme-warning) 38%, transparent)',
 }
 
 export const SWARM2_INFORMATION_HIERARCHY = [
@@ -653,6 +654,35 @@ function formatAssignedModel(model?: string | null, provider?: string | null): s
   return 'Worker'
 }
 
+// Sentinel id for the synthetic orchestrator (Floyd) node in the Aurora chart.
+const ORCHESTRATOR_ID = '__swarm_orchestrator__'
+
+// Map a merged swarm member + its runtime entry into the Aurora view-model.
+function toAuroraAgent(member: CrewMember, runtime: RuntimeEntry | undefined): AuroraAgent {
+  const offline = getOnlineStatus(member) === 'offline'
+  const name = member.displayName || member.id
+  return {
+    id: member.id,
+    name,
+    mono: monogram(name),
+    role: member.role || 'Worker',
+    model: formatAssignedModel(member.model, member.provider),
+    status: deriveAuroraStatus({
+      offline,
+      currentTask: runtime?.currentTask,
+      checkpointStatus: runtime?.checkpointStatus,
+      runtimeState: runtime?.state,
+    }),
+    progress: auroraProgress({
+      checkpointStatus: runtime?.checkpointStatus,
+      currentTask: runtime?.currentTask,
+      phase: runtime?.phase,
+    }),
+    task: displayTaskTitle(runtime, 'Listo para tarea'),
+    age: relativeTime(runtime?.lastOutputAt ?? runtime?.lastSessionStartedAt ?? member.lastSessionAt ?? null),
+  }
+}
+
 type ControlPlaneStageProps = {
   members: Array<CrewMember>
   selectedId: string | null
@@ -688,6 +718,12 @@ type ControlPlaneStageProps = {
   onClearFocusedRuntimeWorker: () => void
   onStartAgentSession: (workerId: string) => void
   onScrollTmuxSession: (workerId: string, direction: 'up' | 'down', session?: string | null) => void
+  orchestratorAgent: AuroraAgent
+  workerAgents: Array<AuroraAgent>
+  detailTab: AuroraDetailTab
+  onDetailTab: (tab: AuroraDetailTab) => void
+  onDispatch: () => void
+  blockedCount: number
 }
 
 function ControlPlaneStage({
@@ -725,6 +761,12 @@ function ControlPlaneStage({
   onClearFocusedRuntimeWorker,
   onStartAgentSession,
   onScrollTmuxSession,
+  orchestratorAgent,
+  workerAgents,
+  detailTab,
+  onDetailTab,
+  onDispatch,
+  blockedCount,
 }: ControlPlaneStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null)
   const anchorRef = useRef<HTMLDivElement | null>(null)
@@ -791,73 +833,47 @@ function ControlPlaneStage({
       className="relative overflow-hidden rounded-3xl border border-[var(--theme-border)] bg-[var(--theme-card)] p-3 shadow-[0_24px_80px_var(--theme-shadow)]"
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,var(--theme-accent-soft),transparent_42%)]" />
-      <Swarm2Wires
-        containerRef={stageRef}
-        anchorRef={anchorRef}
-        workerRefs={workerRefsMap.current}
-        workers={wireTargets}
-        version={refsVersion}
-      />
-      <div className="relative z-10 flex flex-col items-center gap-4">
-        <Swarm2OrchestratorCard
-          totalWorkers={members.length}
-          activeRuntimeCount={activeRuntimeCount}
-          roomCount={roomIds.length}
-          authErrors={authErrors}
-          selectedLabel={selectedLabel}
-          workspaceModel={workspaceModel}
-          viewMode={viewMode}
-          onViewModeChange={onViewModeChange}
-          lanes={lanes}
-          activeAgents={activeAgents}
-          recentUpdates={recentUpdates}
-          latestMission={latestMission}
-          inboxCounts={inboxCounts}
-          members={members}
-          roomIds={roomIds}
-          selectedId={selectedId}
-          routerSeed={routerSeed}
-          onOpenRouter={onOpenRouter}
-          onRouterResults={() => {
-            void onRouterResults()
-          }}
-          onAnchorRef={setAnchor}
-          className="w-full max-w-5xl"
+      <div className="relative z-10 flex flex-col gap-4">
+        <AuroraHeader
+          view={viewMode}
+          onView={onViewModeChange}
+          workersCount={members.length}
+          activeCount={activeRuntimeCount}
+          blockedCount={blockedCount}
+          onRouter={onOpenRouter}
         />
         <div className="relative w-full pt-3">
           <div className={cn('relative z-10', viewMode === 'cards' ? 'block' : 'hidden')}>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 min-[1680px]:grid-cols-3">
-              {members.length === 0 ? (
-                <div className="col-span-full rounded-[1.5rem] border border-dashed border-[var(--theme-border)] bg-[var(--theme-card)] p-8 text-sm text-[var(--theme-muted)]">
-                  No swarm workers discovered from crew status yet.
+            <AuroraOrgChart
+              orchestrator={orchestratorAgent}
+              workers={workerAgents}
+              workersCount={members.length}
+              activeCount={activeRuntimeCount}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              onDispatch={onDispatch}
+            />
+            {(() => {
+              const selectedAgent =
+                selectedId === orchestratorAgent.id
+                  ? orchestratorAgent
+                  : workerAgents.find((w) => w.id === selectedId) ??
+                    workerAgents[0] ??
+                    orchestratorAgent
+              const selRuntime = runtimeByWorker.get(selectedAgent.id)
+              return (
+                <div className="mt-6">
+                  <AuroraDetailPanel
+                    agent={selectedAgent}
+                    tab={detailTab}
+                    onTab={onDetailTab}
+                    terminalLines={recentLines(selRuntime)}
+                    artifacts={selRuntime?.artifacts ?? []}
+                    previews={selRuntime?.previews ?? []}
+                  />
                 </div>
-              ) : (
-                members.map((member) => {
-                  const runtime = runtimeByWorker.get(member.id)
-                  return (
-                    <OperationalWorkerCard
-                      key={member.id}
-                      cardRef={setWorkerRef(member.id)}
-                      member={member}
-                      currentTask={runtime?.currentTask ?? null}
-                      checkpointStatus={runtime?.checkpointStatus ?? null}
-                      runtimeState={runtime?.state ?? null}
-                      recentLines={recentLines(runtime)}
-                      recentOutputAt={runtime?.lastOutputAt ?? runtime?.lastSessionStartedAt ?? null}
-                      recentSummary={runtime?.lastRealSummary ?? runtime?.lastRealResult ?? runtime?.lastSummary ?? runtime?.lastResult ?? runtime?.blockedReason ?? null}
-                      artifacts={runtime?.artifacts ?? []}
-                      previews={runtime?.previews ?? []}
-                      inRoom={roomIds.includes(member.id)}
-                      selected={member.id === selectedId}
-                      onSelect={() => onSelect(member.id)}
-                      onToggleRoom={() => onToggleRoom(member.id)}
-                      onOpenTui={() => onOpenTui(member.id)}
-                      onOpenTasks={() => onOpenTasks(member.id)}
-                    />
-                  )
-                })
-              )}
-            </div>
+              )
+            })()}
           </div>
 
           <div className={cn('relative z-10 flex flex-col gap-3', viewMode === 'runtime' ? 'block' : 'hidden')}>
@@ -993,6 +1009,7 @@ export function Swarm2Screen() {
     }
   })
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
+  const [detailTab, setDetailTab] = useState<AuroraDetailTab>('chat')
   const [routerOpen, setRouterOpen] = useState(false)
   const [routerSeed, setRouterSeed] = useState<{ key: number; prompt: string; mode: 'auto' | 'manual' | 'broadcast' } | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -1207,7 +1224,10 @@ export function Swarm2Screen() {
       setFocusedRuntimeWorkerId(null)
       return
     }
-    if (!selectedId || !members.some((member) => member.id === selectedId)) {
+    if (
+      !selectedId ||
+      (selectedId !== ORCHESTRATOR_ID && !members.some((member) => member.id === selectedId))
+    ) {
       setSelectedId(members[0]?.id ?? null)
     }
     if (
@@ -1226,6 +1246,31 @@ export function Swarm2Screen() {
   const activeRuntimeCount = members.filter((member) =>
     isRuntimeActive(runtimeByWorker.get(member.id)),
   ).length
+
+  // Aurora view-models: one agent per member + a synthetic orchestrator (Floyd).
+  const workerAgents = useMemo<Array<AuroraAgent>>(
+    () => members.map((member) => toAuroraAgent(member, runtimeByWorker.get(member.id))),
+    [members, runtimeByWorker],
+  )
+  const blockedCount = useMemo(
+    () => workerAgents.filter((agent) => agent.status === 'blocked').length,
+    [workerAgents],
+  )
+  const orchestratorAgent = useMemo<AuroraAgent>(
+    () => ({
+      id: ORCHESTRATOR_ID,
+      name: 'Floyd',
+      mono: 'F',
+      role: 'Orquestador · Dispatch',
+      model: healthQuery.data?.workspaceModel || 'Orquestador',
+      status: activeRuntimeCount > 0 ? 'active' : 'idle',
+      progress: members.length ? Math.round((activeRuntimeCount / members.length) * 100) : 0,
+      task: 'Despacha y supervisa al equipo',
+      age: '',
+      isOrchestrator: true,
+    }),
+    [healthQuery.data?.workspaceModel, activeRuntimeCount, members.length],
+  )
   const selectedMember = selectedId
     ? members.find((member) => member.id === selectedId)
     : null
@@ -1643,6 +1688,12 @@ export function Swarm2Screen() {
             onClearFocusedRuntimeWorker={() => setFocusedRuntimeWorkerId(null)}
             onStartAgentSession={(workerId) => { void startAgentSession(workerId) }}
             onScrollTmuxSession={(workerId, direction, session) => { void scrollTmuxSession(workerId, direction, session) }}
+            orchestratorAgent={orchestratorAgent}
+            workerAgents={workerAgents}
+            detailTab={detailTab}
+            onDetailTab={setDetailTab}
+            onDispatch={() => setRouterOpen(true)}
+            blockedCount={blockedCount}
           />
         </div>
 
