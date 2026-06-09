@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { isAuthenticated } from '../../server/auth-middleware'
 import { readWorkerMessages, type SwarmChatMessage } from '../../server/swarm-chat-reader'
 import { rosterByWorkerId } from '../../server/swarm-roster'
+import { resolveHermesBin } from '../../server/hermes-cli'
 
 type DirectChatRequest = {
   workerId?: unknown
@@ -143,6 +144,10 @@ async function ensureLiveTmuxSession(workerId: string): Promise<{ ok: true; tmux
 
   const profilePath = getProfilePath(workerId)
   const cwd = resolveWorkerCwd(workerId)
+  const hermesBin = resolveHermesBin()
+  const localBin = join(homedir(), '.local', 'bin')
+  const escapedHome = profilePath.replace(/'/g, `'\\''`)
+  const escapedBin = hermesBin.replace(/'/g, `'\\''`)
   const started = await execFileAsync(tmuxBin, [
     'new-session',
     '-d',
@@ -150,7 +155,10 @@ async function ensureLiveTmuxSession(workerId: string): Promise<{ ok: true; tmux
     sessionName,
     '-c',
     cwd,
-    `HERMES_HOME='${profilePath.replace(/'/g, `'\\''`)}' exec hermes chat --continue`,
+    // Absolute hermes path + ~/.local/bin on PATH so the spawned shell finds the
+    // CLI even though the workspace process PATH omits ~/.local/bin (otherwise
+    // the session dies on `hermes: not found` and delivery 500s).
+    `PATH='${localBin}':"$PATH" HERMES_HOME='${escapedHome}' exec '${escapedBin}' chat --continue`,
   ])
   if (!started.ok) return { ok: false, error: started.error }
   await sleep(1200)
