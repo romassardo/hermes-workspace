@@ -1904,7 +1904,8 @@ export function Swarm2Screen() {
                     }}
                   />
                 </div>
-              </div>,
+              </div>
+            </div>,
             document.body,
           )
         : null}
