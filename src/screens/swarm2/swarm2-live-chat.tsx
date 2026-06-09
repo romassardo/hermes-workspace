@@ -18,6 +18,9 @@ type Swarm2LiveChatProps = {
   preview?: boolean
   previewLimit?: number
   nativeStyle?: boolean
+  /** Let the message list fill its parent (no max-height cap) so the composer
+   *  pins to the bottom. Use when the chat lives in a height-controlled panel. */
+  fill?: boolean
 }
 
 function formatMessageTime(ts: number | null | undefined): string {
@@ -183,6 +186,7 @@ export function Swarm2LiveChat({
   preview = false,
   previewLimit = 4,
   nativeStyle = false,
+  fill = false,
 }: Swarm2LiveChatProps) {
   const queryClient = useQueryClient()
   const {
@@ -338,7 +342,13 @@ export function Swarm2LiveChat({
         ref={scrollRef}
         className={cn(
           'flex-1 space-y-1.5 overflow-y-auto px-3 py-2',
-          preview ? 'max-h-[260px] min-h-[140px]' : nativeStyle ? 'max-h-[300px] min-h-[170px]' : 'max-h-[250px] min-h-[120px]',
+          fill
+            ? 'min-h-0'
+            : preview
+              ? 'max-h-[260px] min-h-[140px]'
+              : nativeStyle
+                ? 'max-h-[300px] min-h-[170px]'
+                : 'max-h-[250px] min-h-[120px]',
         )}
       >
         {isLoading ? (

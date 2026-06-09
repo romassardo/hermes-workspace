@@ -213,6 +213,7 @@ export function AuroraDetailPanel({
             workerId={agent.id}
             preview={false}
             nativeStyle
+            fill
             className="h-full bg-[var(--theme-bg)] text-[var(--theme-text)]"
           />
         ) : tab === 'tareas' ? (
