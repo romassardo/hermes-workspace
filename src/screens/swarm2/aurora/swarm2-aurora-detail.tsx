@@ -5,6 +5,7 @@
  */
 import { useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from '@tanstack/react-router'
 import type { AuroraAgent } from './swarm2-aurora-data'
 import { Avatar, ModelChip, StatusPill } from './swarm2-aurora-atoms'
 import { Swarm2LiveChat } from '../swarm2-live-chat'
@@ -56,6 +57,102 @@ function TerminalBody({ lines, model, workerId }: { lines: Array<string>; model:
   )
 }
 
+export interface OrchestratorView {
+  workersCount: number
+  activeCount: number
+  blockedCount: number
+  mission: { title: string; state: string; checkpointedCount: number; assignmentCount: number } | null
+  recentUpdates: Array<{ workerId: string; workerName: string; text: string; age: string; tone: 'idle' | 'active' | 'warning' }>
+  onDispatch: () => void
+}
+
+function StatBox({ label, value, color }: { label: string; value: number; color?: string }) {
+  return (
+    <div style={{ flex: 1, textAlign: 'center', padding: '10px 8px', borderRadius: 12, background: 'var(--theme-bg)', border: '1px solid var(--theme-border)' }}>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color ?? 'var(--theme-text)', fontVariantNumeric: 'tabular-nums', fontFamily: SANS }}>{value}</div>
+      <div style={{ fontSize: 9.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--theme-faint)', marginTop: 2 }}>{label}</div>
+    </div>
+  )
+}
+
+// Orchestrator (Floyd) command-center: team stats, dispatch, link to his main
+// chat, the active mission, and recent worker activity. Shown instead of the
+// per-worker tabs (Floyd is the synthetic control-plane node, not a profile).
+function OrchestratorOverview({ view }: { view?: OrchestratorView }) {
+  if (!view) {
+    return (
+      <div style={{ height: '100%', display: 'grid', placeItems: 'center', textAlign: 'center', padding: '0 24px', fontFamily: SANS }}>
+        <div style={{ maxWidth: 420, fontSize: 13, lineHeight: 1.6, color: 'var(--theme-muted)' }}>
+          Floyd orquesta al equipo. Seleccioná un agente del organigrama para ver su chat, tareas, terminal y output.
+        </div>
+      </div>
+    )
+  }
+  const toneColor = (t: string) =>
+    t === 'warning' ? 'var(--theme-danger)' : t === 'active' ? 'var(--theme-success)' : 'var(--theme-faint)'
+  const missionPct = view.mission && view.mission.assignmentCount
+    ? Math.round((view.mission.checkpointedCount / view.mission.assignmentCount) * 100)
+    : 0
+  return (
+    <div className="swa-scroll" style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14, fontFamily: SANS, paddingRight: 2 }}>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <StatBox label="Workers" value={view.workersCount} />
+        <StatBox label="Activos" value={view.activeCount} color="var(--theme-success)" />
+        <StatBox label="Bloqueados" value={view.blockedCount} color={view.blockedCount > 0 ? 'var(--theme-danger)' : undefined} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={view.onDispatch}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 10, background: 'var(--theme-accent-secondary)', color: '#1a130a', border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: SANS }}
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 8h12M9 3l5 5-5 5" /></svg>
+          Despachar tarea
+        </button>
+        <Link
+          to="/chat"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 10, background: 'var(--theme-bg)', color: 'var(--theme-text)', border: '1px solid var(--theme-border)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, fontFamily: SANS, textDecoration: 'none' }}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h9A1.5 1.5 0 0 1 14 4.5v5A1.5 1.5 0 0 1 12.5 11H6l-3 2.5V11H3.5A1.5 1.5 0 0 1 2 9.5v-5Z" /></svg>
+          Abrir chat de Floyd
+        </Link>
+      </div>
+
+      {view.mission ? (
+        <div style={{ borderRadius: 12, background: 'var(--theme-card2)', border: '1px solid var(--theme-border)', padding: '12px 14px' }}>
+          <div style={{ fontSize: 9.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--theme-faint)' }}>Misión activa</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--theme-text)', marginTop: 5 }}>{view.mission.title}</div>
+          <div style={{ marginTop: 8, height: 5, borderRadius: 99, background: 'var(--theme-bg)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${missionPct}%`, background: 'var(--theme-accent-secondary)', borderRadius: 99 }} />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--theme-muted)', marginTop: 6 }}>{view.mission.checkpointedCount}/{view.mission.assignmentCount} checkpoints · {view.mission.state}</div>
+        </div>
+      ) : null}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ fontSize: 9.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--theme-faint)' }}>Actividad reciente</div>
+        {view.recentUpdates.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--theme-muted)' }}>Sin actividad reciente.</div>
+        ) : (
+          view.recentUpdates.map((u) => (
+            <div key={u.workerId} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '9px 11px', borderRadius: 10, background: 'var(--theme-card2)', border: '1px solid var(--theme-border)' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: toneColor(u.tone), marginTop: 5, flex: '0 0 auto' }} />
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--theme-text)' }}>{u.workerName}</span>
+                  <span style={{ fontSize: 10, color: 'var(--theme-faint)', whiteSpace: 'nowrap' }}>{u.age}</span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--theme-muted)', lineHeight: 1.4, marginTop: 2 }}>{u.text}</div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
 export interface AuroraDetailPanelProps {
   agent: AuroraAgent
   tab: AuroraDetailTab
@@ -65,6 +162,8 @@ export interface AuroraDetailPanelProps {
   previews?: Array<Swarm2Preview>
   changedFiles?: Array<string>
   height?: number
+  /** Command-center data shown when the selected agent is the orchestrator. */
+  orchestratorView?: OrchestratorView
 }
 
 export function AuroraDetailPanel({
@@ -76,6 +175,7 @@ export function AuroraDetailPanel({
   previews = [],
   changedFiles = [],
   height = 372,
+  orchestratorView,
 }: AuroraDetailPanelProps) {
   const [expanded, setExpanded] = useState(false)
   const tabPill: CSSProperties = {
@@ -132,6 +232,7 @@ export function AuroraDetailPanel({
             <ModelChip model={agent.model} />
           </div>
         </div>
+        {!agent.isOrchestrator ? (
         <div style={tabPill}>
           {TABS.map((t) => {
             const on = tab === t.id
@@ -158,6 +259,7 @@ export function AuroraDetailPanel({
             )
           })}
         </div>
+        ) : null}
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
@@ -189,25 +291,7 @@ export function AuroraDetailPanel({
       {/* body */}
       <div style={{ padding: '18px 20px', boxSizing: 'border-box', overflow: 'hidden', ...(expanded ? { flex: 1, minHeight: 0 } : { height }) }}>
         {agent.isOrchestrator ? (
-          <div
-            style={{
-              height: '100%',
-              display: 'grid',
-              placeItems: 'center',
-              textAlign: 'center',
-              padding: '0 24px',
-              fontFamily: SANS,
-            }}
-          >
-            <div style={{ maxWidth: 420 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--theme-text)', marginBottom: 6 }}>
-                {agent.name} orquesta al equipo
-              </div>
-              <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--theme-muted)' }}>
-                Despacha y supervisa a los workers. Seleccioná un agente del organigrama para ver su chat, tareas, terminal y output.
-              </div>
-            </div>
-          </div>
+          <OrchestratorOverview view={orchestratorView} />
         ) : tab === 'chat' ? (
           <Swarm2LiveChat
             workerId={agent.id}

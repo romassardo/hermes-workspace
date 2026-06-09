@@ -33,7 +33,7 @@ import { cn } from '@/lib/utils'
 import type { AuroraAgent } from './aurora/swarm2-aurora-data'
 import { auroraProgress, auroraStatusInfo, deriveAuroraStatus, monogram } from './aurora/swarm2-aurora-data'
 import { AuroraHeader, AuroraOrgChart } from './aurora/swarm2-aurora-organigrama'
-import { AuroraDetailPanel, type AuroraDetailTab } from './aurora/swarm2-aurora-detail'
+import { AuroraDetailPanel, type AuroraDetailTab, type OrchestratorView } from './aurora/swarm2-aurora-detail'
 import { createPortal } from 'react-dom'
 
 const SWARM2_ROOM_STORAGE_KEY = 'claude-swarm2-room-v1'
@@ -732,6 +732,7 @@ type ControlPlaneStageProps = {
   onDetailTab: (tab: AuroraDetailTab) => void
   onDispatch: () => void
   blockedCount: number
+  orchestratorView: OrchestratorView
 }
 
 function ControlPlaneStage({
@@ -775,6 +776,7 @@ function ControlPlaneStage({
   onDetailTab,
   onDispatch,
   blockedCount,
+  orchestratorView,
 }: ControlPlaneStageProps) {
   const activeWorkerCount = workerAgents.filter((agent) => auroraStatusInfo(agent.status).working).length
   const stageRef = useRef<HTMLDivElement | null>(null)
@@ -879,6 +881,7 @@ function ControlPlaneStage({
                     terminalLines={recentLines(selRuntime)}
                     artifacts={selRuntime?.artifacts ?? []}
                     previews={selRuntime?.previews ?? []}
+                    orchestratorView={orchestratorView}
                   />
                 </div>
               )
@@ -1730,6 +1733,21 @@ export function Swarm2Screen() {
             onDetailTab={setDetailTab}
             onDispatch={() => setRouterOpen(true)}
             blockedCount={blockedCount}
+            orchestratorView={{
+              workersCount: workerAgents.length,
+              activeCount: activeWorkerCount,
+              blockedCount,
+              mission: latestMission
+                ? {
+                    title: latestMission.title,
+                    state: latestMission.state,
+                    checkpointedCount: latestMission.checkpointedCount,
+                    assignmentCount: latestMission.assignmentCount,
+                  }
+                : null,
+              recentUpdates,
+              onDispatch: () => setRouterOpen(true),
+            }}
           />
           ) : null}
         </div>
