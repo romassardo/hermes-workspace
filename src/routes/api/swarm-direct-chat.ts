@@ -148,21 +148,35 @@ async function ensureLiveTmuxSession(workerId: string): Promise<{ ok: true; tmux
   const localBin = join(homedir(), '.local', 'bin')
   const escapedHome = profilePath.replace(/'/g, `'\\''`)
   const escapedBin = hermesBin.replace(/'/g, `'\\''`)
-  const started = await execFileAsync(tmuxBin, [
-    'new-session',
-    '-d',
-    '-s',
-    sessionName,
-    '-c',
-    cwd,
-    // Absolute hermes path + ~/.local/bin on PATH so the spawned shell finds the
-    // CLI even though the workspace process PATH omits ~/.local/bin (otherwise
-    // the session dies on `hermes: not found` and delivery 500s).
-    `PATH='${localBin}':"$PATH" HERMES_HOME='${escapedHome}' exec '${escapedBin}' chat --continue`,
-  ])
-  if (!started.ok) return { ok: false, error: started.error }
-  await sleep(1200)
-  return { ok: true, tmuxBin, sessionName }
+  // Resume the worker's last chat when possible, else start a fresh session.
+  // `hermes chat --continue` exits immediately for workers with no prior chat,
+  // which tears down the tmux server before we can paste ("no server running").
+  // So we verify the session survived and fall back to a fresh `hermes chat`.
+  // Also: absolute hermes path + ~/.local/bin on PATH (the workspace process
+  // PATH omits ~/.local/bin, which would otherwise be `hermes: not found`).
+  let lastError = 'hermes chat session failed to start'
+  for (const variant of [' --continue', '']) {
+    await execFileAsync(tmuxBin, ['kill-session', '-t', sessionName])
+    const started = await execFileAsync(tmuxBin, [
+      'new-session',
+      '-d',
+      '-s',
+      sessionName,
+      '-c',
+      cwd,
+      `PATH='${localBin}':"$PATH" HERMES_HOME='${escapedHome}' exec '${escapedBin}' chat${variant}`,
+    ])
+    if (!started.ok) {
+      lastError = started.error
+      continue
+    }
+    await sleep(1500)
+    if (await tmuxHasSession(tmuxBin, sessionName)) {
+      return { ok: true, tmuxBin, sessionName }
+    }
+    lastError = `hermes chat${variant ? ' --continue' : ' (fresh)'} exited immediately`
+  }
+  return { ok: false, error: lastError }
 }
 
 async function sendPromptToLiveSession(workerId: string, prompt: string): Promise<{ ok: true; delivery: 'tmux' } | { ok: false; error: string }> {
