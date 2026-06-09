@@ -837,7 +837,7 @@ function ControlPlaneStage({
         <AuroraHeader
           view={viewMode}
           onView={onViewModeChange}
-          workersCount={members.length}
+          workersCount={workerAgents.length}
           activeCount={activeRuntimeCount}
           blockedCount={blockedCount}
           onRouter={onOpenRouter}
@@ -847,7 +847,7 @@ function ControlPlaneStage({
             <AuroraOrgChart
               orchestrator={orchestratorAgent}
               workers={workerAgents}
-              workersCount={members.length}
+              workersCount={workerAgents.length}
               activeCount={activeRuntimeCount}
               selectedId={selectedId}
               onSelect={onSelect}
@@ -1247,9 +1247,20 @@ export function Swarm2Screen() {
     isRuntimeActive(runtimeByWorker.get(member.id)),
   ).length
 
-  // Aurora view-models: one agent per member + a synthetic orchestrator (Floyd).
+  // Aurora view-models: one agent per worker + a synthetic orchestrator (Floyd).
+  // The primary/default profile IS the orchestrator, so it must not also appear
+  // as a worker node (that produced a duplicate, broken "workspace · primary
+  // profile" card).
   const workerAgents = useMemo<Array<AuroraAgent>>(
-    () => members.map((member) => toAuroraAgent(member, runtimeByWorker.get(member.id))),
+    () =>
+      members
+        .filter(
+          (member) =>
+            member.id !== 'default' &&
+            !/primary profile/i.test(member.role ?? '') &&
+            !/^workspace$/i.test(member.displayName ?? ''),
+        )
+        .map((member) => toAuroraAgent(member, runtimeByWorker.get(member.id))),
     [members, runtimeByWorker],
   )
   const blockedCount = useMemo(

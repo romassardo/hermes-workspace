@@ -103,7 +103,7 @@ export function AuroraHeader({
                 fontWeight: 600,
                 fontFamily: SANS,
                 background: on ? 'var(--theme-accent-secondary)' : 'transparent',
-                color: on ? 'var(--color-primary-950, #1a130a)' : 'var(--theme-muted)',
+                color: on ? '#1a130a' : 'var(--theme-muted)',
                 transition: 'all .15s',
               }}
             >
@@ -261,7 +261,7 @@ function AuroraOrchestratorNode({
             padding: '8px 16px',
             borderRadius: 10,
             background: 'var(--theme-accent-secondary)',
-            color: 'var(--color-primary-950, #1a130a)',
+            color: '#1a130a',
             border: 'none',
             cursor: 'pointer',
             fontSize: 12.5,
@@ -419,9 +419,13 @@ export function AuroraOrgChart({
   const rowStyle: CSSProperties = {
     display: 'flex',
     gap: 20,
-    justifyContent: 'center',
+    // "safe center" keeps the row centered but falls back to flex-start when it
+    // overflows, so the first node is never clipped on the left (a classic
+    // centered-flex + overflow bug).
+    justifyContent: 'safe center',
     flexWrap: 'nowrap',
     overflowX: 'auto',
+    paddingInline: 2,
     paddingBottom: 4,
   }
 

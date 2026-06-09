@@ -140,7 +140,7 @@ export function AuroraDetailPanel({
                   fontWeight: 600,
                   fontFamily: SANS,
                   background: on ? 'var(--theme-accent-secondary)' : 'transparent',
-                  color: on ? 'var(--color-primary-950, #1a130a)' : 'var(--theme-muted)',
+                  color: on ? '#1a130a' : 'var(--theme-muted)',
                   transition: 'all 0.15s',
                 }}
               >
