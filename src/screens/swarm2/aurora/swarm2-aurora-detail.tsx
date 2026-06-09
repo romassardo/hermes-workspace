@@ -4,6 +4,7 @@
  * reuse the real swarm2 data components so this stays wired to live data.
  */
 import { useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import type { AuroraAgent } from './swarm2-aurora-data'
 import { Avatar, ModelChip, StatusPill } from './swarm2-aurora-atoms'
 import { Swarm2LiveChat } from '../swarm2-live-chat'
@@ -93,15 +94,15 @@ export function AuroraDetailPanel({
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
-    ...(expanded ? { position: 'fixed', inset: 24, zIndex: 60, maxHeight: 'calc(100vh - 48px)' } : {}),
+    ...(expanded ? { position: 'fixed', inset: 24, zIndex: 1000, height: 'calc(100vh - 48px)' } : {}),
   }
 
-  return (
+  const content = (
     <>
       {expanded ? (
         <div
           onClick={() => setExpanded(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)', zIndex: 55 }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)', zIndex: 999 }}
         />
       ) : null}
       <div style={panelStyle}>
@@ -236,4 +237,8 @@ export function AuroraDetailPanel({
       </div>
     </>
   )
+
+  return expanded && typeof document !== 'undefined'
+    ? createPortal(content, document.body)
+    : content
 }

@@ -34,6 +34,7 @@ import type { AuroraAgent } from './aurora/swarm2-aurora-data'
 import { auroraProgress, auroraStatusInfo, deriveAuroraStatus, monogram } from './aurora/swarm2-aurora-data'
 import { AuroraHeader, AuroraOrgChart } from './aurora/swarm2-aurora-organigrama'
 import { AuroraDetailPanel, type AuroraDetailTab } from './aurora/swarm2-aurora-detail'
+import { createPortal } from 'react-dom'
 
 const SWARM2_ROOM_STORAGE_KEY = 'claude-swarm2-room-v1'
 
@@ -666,7 +667,8 @@ const AURORA_NAME_OVERRIDES: Record<string, string> = {
 // Map a merged swarm member + its runtime entry into the Aurora view-model.
 function toAuroraAgent(member: CrewMember, runtime: RuntimeEntry | undefined): AuroraAgent {
   const offline = getOnlineStatus(member) === 'offline'
-  const name = AURORA_NAME_OVERRIDES[member.id] || member.displayName || member.id
+  const rawName = AURORA_NAME_OVERRIDES[member.id] || member.displayName || member.id
+  const name = rawName ? rawName.charAt(0).toUpperCase() + rawName.slice(1) : rawName
   return {
     id: member.id,
     name,
@@ -1828,22 +1830,33 @@ export function Swarm2Screen() {
         </div>
       ) : null}
 
-      <RouterChat
-        members={members}
-        roomIds={roomIds}
-        selectedId={selectedId}
-        open={routerOpen}
-        showClosedDock={false}
-        seedPrompt={routerSeed?.prompt ?? null}
-        seedMode={routerSeed?.mode}
-        seedKey={routerSeed?.key ?? null}
-        onOpen={() => setRouterOpen(true)}
-        onClose={() => setRouterOpen(false)}
-        onResults={() => {
-          void runtimeQuery.refetch()
-          void missionsQuery.refetch()
-        }}
-      />
+      {typeof document !== 'undefined'
+        ? createPortal(
+            // Portal to <body> so RouterChat's `position: fixed` is relative to
+            // the viewport (not the transformed screen ancestor, which left it
+            // cut off mid-page). The theme wrapper re-supplies the derived
+            // `--theme-*` tokens RouterChat reads.
+            <div style={SWARM2_OPERATION_THEME}>
+              <RouterChat
+                members={members}
+                roomIds={roomIds}
+                selectedId={selectedId}
+                open={routerOpen}
+                showClosedDock={false}
+                seedPrompt={routerSeed?.prompt ?? null}
+                seedMode={routerSeed?.mode}
+                seedKey={routerSeed?.key ?? null}
+                onOpen={() => setRouterOpen(true)}
+                onClose={() => setRouterOpen(false)}
+                onResults={() => {
+                  void runtimeQuery.refetch()
+                  void missionsQuery.refetch()
+                }}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }
