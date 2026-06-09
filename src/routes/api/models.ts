@@ -214,18 +214,29 @@ export const Route = createFileRoute('/api/models')({
           // available. Previously, a non-empty models.json stopped here, so the
           // Operations picker only showed the local Workspace subset and drifted
           // from the CLI/backend model universe.
+          // Best-effort: a gateway hiccup (e.g. /v1/models 503) must NOT 503 the
+          // whole endpoint — the local models.json + discovery are still valid.
           if (getGatewayCapabilities().models) {
-            const hermesModels = await fetchClaudeModels()
-            models = mergeModelEntries(models, hermesModels)
-            source = source === 'models.json' ? 'models.json+hermes-agent' : 'hermes-agent'
+            try {
+              const hermesModels = await fetchClaudeModels()
+              models = mergeModelEntries(models, hermesModels)
+              source = source === 'models.json' ? 'models.json+hermes-agent' : 'hermes-agent'
+            } catch {
+              /* gateway catalog unavailable — keep the local models */
+            }
           }
 
-          // Merge auto-discovered local models (Ollama, Atomic Chat, etc.)
-          await ensureDiscovery()
-          const localModels = getDiscoveredModels()
-          models = mergeModelEntries(models, localModels)
-          for (const m of localModels) {
-            ensureProviderInConfig(m.provider)
+          // Merge auto-discovered local models (Ollama, Atomic Chat, etc.) — also
+          // best-effort so discovery failures don't take down the endpoint.
+          try {
+            await ensureDiscovery()
+            const localModels = getDiscoveredModels()
+            models = mergeModelEntries(models, localModels)
+            for (const m of localModels) {
+              ensureProviderInConfig(m.provider)
+            }
+          } catch {
+            /* discovery unavailable — keep what we have */
           }
 
           const configuredProviders = Array.from(
