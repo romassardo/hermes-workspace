@@ -31,7 +31,7 @@ import { SwarmTerminal } from '@/components/swarm/swarm-terminal'
 import { WorkflowHelpModal } from '@/components/workflow-help-modal'
 import { cn } from '@/lib/utils'
 import type { AuroraAgent } from './aurora/swarm2-aurora-data'
-import { auroraProgress, deriveAuroraStatus, monogram } from './aurora/swarm2-aurora-data'
+import { auroraProgress, auroraStatusInfo, deriveAuroraStatus, monogram } from './aurora/swarm2-aurora-data'
 import { AuroraHeader, AuroraOrgChart } from './aurora/swarm2-aurora-organigrama'
 import { AuroraDetailPanel, type AuroraDetailTab } from './aurora/swarm2-aurora-detail'
 
@@ -657,10 +657,16 @@ function formatAssignedModel(model?: string | null, provider?: string | null): s
 // Sentinel id for the synthetic orchestrator (Floyd) node in the Aurora chart.
 const ORCHESTRATOR_ID = '__swarm_orchestrator__'
 
+// Cosmetic display-name overrides for profiles whose roster name was never
+// updated to the agent persona (e.g. 'prode' -> Bilardus, unlike scout->Argos).
+const AURORA_NAME_OVERRIDES: Record<string, string> = {
+  prode: 'Bilardus',
+}
+
 // Map a merged swarm member + its runtime entry into the Aurora view-model.
 function toAuroraAgent(member: CrewMember, runtime: RuntimeEntry | undefined): AuroraAgent {
   const offline = getOnlineStatus(member) === 'offline'
-  const name = member.displayName || member.id
+  const name = AURORA_NAME_OVERRIDES[member.id] || member.displayName || member.id
   return {
     id: member.id,
     name,
@@ -768,6 +774,7 @@ function ControlPlaneStage({
   onDispatch,
   blockedCount,
 }: ControlPlaneStageProps) {
+  const activeWorkerCount = workerAgents.filter((agent) => auroraStatusInfo(agent.status).working).length
   const stageRef = useRef<HTMLDivElement | null>(null)
   const anchorRef = useRef<HTMLDivElement | null>(null)
   const workerRefsMap = useRef<Map<string, HTMLElement>>(new Map())
@@ -838,7 +845,7 @@ function ControlPlaneStage({
           view={viewMode}
           onView={onViewModeChange}
           workersCount={workerAgents.length}
-          activeCount={activeRuntimeCount}
+          activeCount={activeWorkerCount}
           blockedCount={blockedCount}
           onRouter={onOpenRouter}
         />
@@ -848,7 +855,7 @@ function ControlPlaneStage({
               orchestrator={orchestratorAgent}
               workers={workerAgents}
               workersCount={workerAgents.length}
-              activeCount={activeRuntimeCount}
+              activeCount={activeWorkerCount}
               selectedId={selectedId}
               onSelect={onSelect}
               onDispatch={onDispatch}
@@ -1267,6 +1274,12 @@ export function Swarm2Screen() {
     () => workerAgents.filter((agent) => agent.status === 'blocked').length,
     [workerAgents],
   )
+  // "Activos" = workers in a working state (active/thinking/writing/reviewing),
+  // NOT activeRuntimeCount (which also counts the default profile = Floyd).
+  const activeWorkerCount = useMemo(
+    () => workerAgents.filter((agent) => auroraStatusInfo(agent.status).working).length,
+    [workerAgents],
+  )
   const orchestratorAgent = useMemo<AuroraAgent>(
     () => ({
       id: ORCHESTRATOR_ID,
@@ -1274,13 +1287,13 @@ export function Swarm2Screen() {
       mono: 'F',
       role: 'Orquestador · Dispatch',
       model: healthQuery.data?.workspaceModel || 'Orquestador',
-      status: activeRuntimeCount > 0 ? 'active' : 'idle',
-      progress: members.length ? Math.round((activeRuntimeCount / members.length) * 100) : 0,
+      status: activeWorkerCount > 0 ? 'active' : 'idle',
+      progress: workerAgents.length ? Math.round((activeWorkerCount / workerAgents.length) * 100) : 0,
       task: 'Despacha y supervisa al equipo',
       age: '',
       isOrchestrator: true,
     }),
-    [healthQuery.data?.workspaceModel, activeRuntimeCount, members.length],
+    [healthQuery.data?.workspaceModel, activeWorkerCount, workerAgents.length],
   )
   const selectedMember = selectedId
     ? members.find((member) => member.id === selectedId)

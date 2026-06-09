@@ -3,7 +3,7 @@
  * agent). Tabs: Chat · Tareas · Terminal · Output. Chrome is Aurora; the bodies
  * reuse the real swarm2 data components so this stays wired to live data.
  */
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import type { AuroraAgent } from './swarm2-aurora-data'
 import { Avatar, ModelChip, StatusPill } from './swarm2-aurora-atoms'
 import { Swarm2LiveChat } from '../swarm2-live-chat'
@@ -76,6 +76,7 @@ export function AuroraDetailPanel({
   changedFiles = [],
   height = 372,
 }: AuroraDetailPanelProps) {
+  const [expanded, setExpanded] = useState(false)
   const tabPill: CSSProperties = {
     display: 'flex',
     gap: 4,
@@ -84,19 +85,26 @@ export function AuroraDetailPanel({
     background: 'var(--theme-bg)',
     border: '1px solid var(--theme-border)',
   }
+  const panelStyle: CSSProperties = {
+    borderRadius: 18,
+    background: 'var(--theme-card)',
+    border: '1px solid var(--theme-border)',
+    boxShadow: '0 20px 60px var(--theme-shadow-2), inset 0 1px 0 rgba(255,255,255,0.04)',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    ...(expanded ? { position: 'fixed', inset: 24, zIndex: 60, maxHeight: 'calc(100vh - 48px)' } : {}),
+  }
 
   return (
-    <div
-      style={{
-        borderRadius: 18,
-        background: 'var(--theme-card)',
-        border: '1px solid var(--theme-border)',
-        boxShadow: '0 20px 60px var(--theme-shadow-2), inset 0 1px 0 rgba(255,255,255,0.04)',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
+    <>
+      {expanded ? (
+        <div
+          onClick={() => setExpanded(false)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)', zIndex: 55 }}
+        />
+      ) : null}
+      <div style={panelStyle}>
       {/* header */}
       <div
         style={{
@@ -149,10 +157,36 @@ export function AuroraDetailPanel({
             )
           })}
         </div>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-label={expanded ? 'Contraer panel' : 'Expandir panel'}
+          title={expanded ? 'Contraer' : 'Expandir para ver mejor'}
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 9,
+            border: '1px solid var(--theme-border)',
+            background: 'var(--theme-bg)',
+            color: 'var(--theme-muted)',
+            cursor: 'pointer',
+            display: 'grid',
+            placeItems: 'center',
+            flex: '0 0 auto',
+          }}
+        >
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            {expanded ? (
+              <path d="M2 6h4V2M10 2v4h4M14 10h-4v4M6 14v-4H2" />
+            ) : (
+              <path d="M6 2H2v4M14 6V2h-4M10 14h4v-4M2 10v4h4" />
+            )}
+          </svg>
+        </button>
       </div>
 
       {/* body */}
-      <div style={{ padding: '18px 20px', height, boxSizing: 'border-box' }}>
+      <div style={{ padding: '18px 20px', boxSizing: 'border-box', overflow: 'hidden', ...(expanded ? { flex: 1, minHeight: 0 } : { height }) }}>
         {agent.isOrchestrator ? (
           <div
             style={{
@@ -199,6 +233,7 @@ export function AuroraDetailPanel({
           />
         )}
       </div>
-    </div>
+      </div>
+    </>
   )
 }

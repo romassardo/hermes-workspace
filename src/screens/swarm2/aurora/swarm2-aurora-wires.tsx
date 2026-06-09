@@ -123,6 +123,9 @@ export function AuroraWires({
           </feMerge>
         </filter>
       </defs>
+      {/* Origin dot is drawn first so the (short, near-vertical) central wires
+          render on top of it instead of being hidden behind the glow. */}
+      <circle cx={geom.origin.x} cy={geom.origin.y} r={4} fill="var(--theme-accent-secondary)" filter="url(#aurora-glow)" />
       {geom.ends.map((end) => {
         const path = buildPath(geom.origin, end.point)
         const st = auroraStatusInfo(end.status)
@@ -162,7 +165,6 @@ export function AuroraWires({
           </g>
         )
       })}
-      <circle cx={geom.origin.x} cy={geom.origin.y} r={5} fill="var(--theme-accent-secondary)" filter="url(#aurora-glow)" />
     </svg>
   )
 }
