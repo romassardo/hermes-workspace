@@ -1019,6 +1019,10 @@ export function Swarm2Screen() {
   })
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
   const [detailTab, setDetailTab] = useState<AuroraDetailTab>('chat')
+  // Client-mount gate: the swarm stage is DOM-measurement + client-data heavy,
+  // so we render it only after mount to avoid SSR/client hydration mismatches
+  // (React #418) — server and first client render both produce null.
+  const [mounted, setMounted] = useState(false)
   const [routerOpen, setRouterOpen] = useState(false)
   const [routerSeed, setRouterSeed] = useState<{ key: number; prompt: string; mode: 'auto' | 'manual' | 'broadcast' } | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -1028,6 +1032,7 @@ export function Swarm2Screen() {
   const modelsQuery = useQuery({
     queryKey: ['swarm2', 'available-models'],
     queryFn: fetchAvailableModels,
+    enabled: addSwarmOpen,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   })
@@ -1249,6 +1254,10 @@ export function Swarm2Screen() {
 
   useLayoutEffect(() => {
     return scheduleScrollContextToTop(topRef.current)
+  }, [])
+
+  useEffect(() => {
+    setMounted(true)
   }, [])
 
 
@@ -1666,6 +1675,7 @@ export function Swarm2Screen() {
         </header>
 
         <div className="grid min-h-0 grid-cols-1 gap-3">
+          {mounted ? (
           <ControlPlaneStage
             members={members}
             selectedId={selectedId}
@@ -1721,6 +1731,7 @@ export function Swarm2Screen() {
             onDispatch={() => setRouterOpen(true)}
             blockedCount={blockedCount}
           />
+          ) : null}
         </div>
 
         {viewMode === 'cards' && members.length > 0 ? (
@@ -1830,7 +1841,7 @@ export function Swarm2Screen() {
         </div>
       ) : null}
 
-      {typeof document !== 'undefined'
+      {mounted
         ? createPortal(
             // Portal to <body> so RouterChat's `position: fixed` is relative to
             // the viewport (not the transformed screen ancestor, which left it
