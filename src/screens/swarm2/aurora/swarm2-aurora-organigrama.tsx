@@ -395,11 +395,23 @@ export function AuroraOrgChart({
     [bump],
   )
 
+  // Cache one stable ref callback per worker id. Returning a fresh function each
+  // render would make React detach/attach the ref every render → bump() →
+  // re-render → infinite loop (React #185). Stable identity fires only on
+  // actual mount/unmount.
+  const setterCache = useRef<Map<string, (el: HTMLElement | null) => void>>(new Map())
   const setWorkerRef = useCallback(
-    (id: string) => (el: HTMLElement | null) => {
-      if (el) workerRefs.current.set(id, el)
-      else workerRefs.current.delete(id)
-      bump()
+    (id: string) => {
+      const cache = setterCache.current
+      const existing = cache.get(id)
+      if (existing) return existing
+      const fn = (el: HTMLElement | null) => {
+        if (el) workerRefs.current.set(id, el)
+        else workerRefs.current.delete(id)
+        bump()
+      }
+      cache.set(id, fn)
+      return fn
     },
     [bump],
   )

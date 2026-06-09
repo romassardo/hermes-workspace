@@ -153,7 +153,27 @@ export function AuroraDetailPanel({
 
       {/* body */}
       <div style={{ padding: '18px 20px', height, boxSizing: 'border-box' }}>
-        {tab === 'chat' ? (
+        {agent.isOrchestrator ? (
+          <div
+            style={{
+              height: '100%',
+              display: 'grid',
+              placeItems: 'center',
+              textAlign: 'center',
+              padding: '0 24px',
+              fontFamily: SANS,
+            }}
+          >
+            <div style={{ maxWidth: 420 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--theme-text)', marginBottom: 6 }}>
+                {agent.name} orquesta al equipo
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--theme-muted)' }}>
+                Despacha y supervisa a los workers. Seleccioná un agente del organigrama para ver su chat, tareas, terminal y output.
+              </div>
+            </div>
+          </div>
+        ) : tab === 'chat' ? (
           <Swarm2LiveChat
             workerId={agent.id}
             preview={false}
