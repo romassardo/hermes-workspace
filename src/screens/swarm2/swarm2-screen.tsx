@@ -1565,7 +1565,7 @@ export function Swarm2Screen() {
       <div
         className={cn(
           'mx-auto flex min-h-full max-w-[1680px] flex-col gap-3 px-3 pt-3 sm:px-4 lg:px-5',
-          routerOpen ? 'pb-[30rem]' : 'pb-24',
+          'pb-24',
         )}
       >
         <header className="rounded-xl border border-primary-200 bg-primary-50/80 px-5 py-3 shadow-sm">
@@ -1859,30 +1859,52 @@ export function Swarm2Screen() {
         </div>
       ) : null}
 
-      {mounted
+      {mounted && routerOpen
         ? createPortal(
-            // Portal to <body> so RouterChat's `position: fixed` is relative to
-            // the viewport (not the transformed screen ancestor, which left it
-            // cut off mid-page). The theme wrapper re-supplies the derived
-            // `--theme-*` tokens RouterChat reads.
+            // Portal to <body> (escapes the transformed screen ancestor) and
+            // present the Router as a CENTERED modal: a backdrop that flex-centers
+            // the `embedded` RouterChat (a normal `w-full` block, not the bottom
+            // `fixed` dock). Clicking the backdrop closes it. The theme wrapper
+            // re-supplies the derived `--theme-*` tokens RouterChat reads.
             <div style={SWARM2_OPERATION_THEME}>
-              <RouterChat
-                members={members}
-                roomIds={roomIds}
-                selectedId={selectedId}
-                open={routerOpen}
-                showClosedDock={false}
-                seedPrompt={routerSeed?.prompt ?? null}
-                seedMode={routerSeed?.mode}
-                seedKey={routerSeed?.key ?? null}
-                onOpen={() => setRouterOpen(true)}
-                onClose={() => setRouterOpen(false)}
-                onResults={() => {
-                  void runtimeQuery.refetch()
-                  void missionsQuery.refetch()
+              <div
+                onClick={() => setRouterOpen(false)}
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  zIndex: 1000,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 24,
+                  background: 'rgba(0,0,0,0.5)',
+                  backdropFilter: 'blur(2px)',
                 }}
-              />
-            </div>,
+              >
+                <div
+                  className="swa-scroll"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ width: '100%', maxWidth: 1040, maxHeight: 'calc(100vh - 48px)', overflowY: 'auto' }}
+                >
+                  <RouterChat
+                    members={members}
+                    roomIds={roomIds}
+                    selectedId={selectedId}
+                    open={routerOpen}
+                    embedded
+                    showClosedDock={false}
+                    seedPrompt={routerSeed?.prompt ?? null}
+                    seedMode={routerSeed?.mode}
+                    seedKey={routerSeed?.key ?? null}
+                    onOpen={() => setRouterOpen(true)}
+                    onClose={() => setRouterOpen(false)}
+                    onResults={() => {
+                      void runtimeQuery.refetch()
+                      void missionsQuery.refetch()
+                    }}
+                  />
+                </div>
+              </div>,
             document.body,
           )
         : null}
